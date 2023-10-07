@@ -5,12 +5,7 @@
 @license: LGPLv3+
 '''
 
-from gi.repository import Gtk
-from gi.repository import GLib
-from gi.repository import GObject
-from gi.repository import Gdk
-from gi.repository import GdkPixbuf
-
+import gtk, gobject
 import thread
 import time
 import subprocess
@@ -18,8 +13,8 @@ import subprocess
 import os, sys
 import base64
 
-try: from gi.repository import GtkSource
-except: GtkSource = None
+try: import gtksourceview2
+except: gtksourceview2 = None
 
 try: import i18n
 except: from gettext import gettext as _
@@ -162,22 +157,22 @@ latex_mark_list = [
     ["ω",     r" \omega "],
 ]
 
-class GtkToolBoxView(Gtk.TextView):
+class GtkToolBoxView(gtk.TextView):
     '''流式布局 ToolBox
     '''
     def __init__(self, latex=""):
         '''初始化
         '''
-        Gtk.TextView.__init__(self)
-        self.props.can_focus = 0
+        self.__gobject_init__()
+        self.unset_flags(gtk.CAN_FOCUS)
         self.set_editable(0)
-        self.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.set_wrap_mode(gtk.WRAP_WORD)
         self.connect('realize', self.on_realize)
         pass
 
     def on_realize(self, *args):
         ## 将默认 I 形鼠标指针换成箭头
-        self.get_window(Gtk.TextWindowType.TEXT).set_cursor(Gdk.Cursor(Gdk.CursorType.ARROW))
+        self.get_window(gtk.TEXT_WINDOW_TEXT).set_cursor(gtk.gdk.Cursor(gtk.gdk.ARROW))
         pass
 
     def add(self, widget):
@@ -187,8 +182,7 @@ class GtkToolBoxView(Gtk.TextView):
         iter = buffer.get_end_iter()
         anchor = buffer.create_child_anchor(iter)
         buffer.insert(iter, "")
-        #widget.set_data('buffer_anchor', anchor)
-        widget.buffer_anchor = anchor
+        widget.set_data('buffer_anchor', anchor)
         self.add_child_at_anchor(widget, anchor)
         pass
 
@@ -204,34 +198,34 @@ class GtkToolBoxView(Gtk.TextView):
             pass
         pass
 
-class LatexMathExpressionsEditor(Gtk.Table):
+class LatexMathExpressionsEditor(gtk.Table):
     '''LaTex 数学公式编辑器
     '''
     def __init__(self, latex=""):
         '''初始化
         '''
-        Gtk.Table.__init__(self)
+        self.__gobject_init__()
         self.set_row_spacings(10)
         self.set_col_spacings(10)
         ## latex edit
-        scrolledwindow1 = Gtk.ScrolledWindow()
-        scrolledwindow1.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolledwindow1 = gtk.ScrolledWindow()
+        scrolledwindow1.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
         scrolledwindow1.show()
-        scrolledwindow1.set_shadow_type(Gtk.ShadowType.IN)
+        scrolledwindow1.set_shadow_type(gtk.SHADOW_IN)
 
-        if GtkSource:
-            self.latex_textview = GtkSource.View()
-            lm = GtkSource.LanguageManager.get_default()
+        if gtksourceview2:
+            self.latex_textview = gtksourceview2.View()
+            lm = gtksourceview2.language_manager_get_default()
             language = lm.get_language('latex')
-            buffer = GtkSource.Buffer()
+            buffer = gtksourceview2.Buffer()
             buffer.set_highlight_syntax(1)
             buffer.set_language(language)
             self.latex_textview.set_buffer(buffer)
             pass
         else:
-            self.latex_textview = Gtk.TextView()
+            self.latex_textview = gtk.TextView()
             pass
-        self.latex_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.latex_textview.set_wrap_mode(gtk.WRAP_WORD)
         self.latex_textview.set_cursor_visible(True)
         self.latex_textview.set_indent(5)
         self.latex_textview.set_editable(True)
@@ -243,14 +237,14 @@ class LatexMathExpressionsEditor(Gtk.Table):
 
         self.attach(scrolledwindow1, 0, 1, 0, 1)
         ## latex preview
-        self.latex_image = Gtk.Image()
+        self.latex_image = gtk.Image()
         #self.latex_image.set_size_request(200, 100)
         self.latex_image.set_padding(0, 0)
         self.latex_image.show()
 
-        box = Gtk.EventBox()
+        box = gtk.EventBox()
         box.show()
-        box.modify_bg(Gtk.StateType.NORMAL, Gdk.Color.parse("#FFFFFF")[1])
+        box.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color("#FFFFFF"))
         box.add(self.latex_image)
         
         self.attach(box, 0, 1, 1, 2)
@@ -259,24 +253,24 @@ class LatexMathExpressionsEditor(Gtk.Table):
         toolview.show()
         #toolview.set_size_request(302, 200)
         for text, mark in latex_mark_list:
-            label = Gtk.Label()
+            label = gtk.Label()
             label.set_markup(text)
             label.set_size_request(30, 20)
             label.show()
-            button = Gtk.Button()
-            button.props.can_focus = 0
+            button = gtk.Button()
+            button.unset_flags(gtk.CAN_FOCUS)
             button.add(label)
-            button.set_relief(Gtk.ReliefStyle.NONE)
+            button.set_relief(gtk.RELIEF_NONE)
             button.connect("clicked", self.on_insert_tex_mark, text, mark)
             button.set_tooltip_text(mark)
             button.show()
             toolview.add(button)
             pass
-        scrolledwindow2 = Gtk.ScrolledWindow()
+        scrolledwindow2 = gtk.ScrolledWindow()
         #scrolledwindow2.set_size_request(300, 400)
-        scrolledwindow2.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolledwindow2.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
         scrolledwindow2.show()
-        scrolledwindow2.set_shadow_type(Gtk.ShadowType.IN)
+        scrolledwindow2.set_shadow_type(gtk.SHADOW_IN)
         scrolledwindow2.add(toolview)
         self.attach(scrolledwindow2, 1, 2, 0, 2)
 
@@ -289,14 +283,14 @@ class LatexMathExpressionsEditor(Gtk.Table):
         '''获取 LaTex
         '''
         buffer = self.latex_textview.get_buffer()
-        return buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter(), 1)
+        return buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter())
 
     def set_pic(self, data):
         '''设置图像
         '''
         if not data:
-            return self.latex_image.set_from_stock(Gtk.STOCK_DIALOG_ERROR, 2)
-        pix = GdkPixbuf.PixbufLoader()
+            return self.latex_image.set_from_stock(gtk.STOCK_DIALOG_ERROR, 2)
+        pix = gtk.gdk.PixbufLoader()
         pix.write(data)
         pix.close()
         self.latex_image.set_from_pixbuf(pix.get_pixbuf())
@@ -316,7 +310,7 @@ class LatexMathExpressionsEditor(Gtk.Table):
             pic = tex2gif(latex, 1)
             old_latex = self.get_latex()
             if latex == self.get_latex():
-                GObject.idle_add(self.set_pic, pic)
+                gobject.idle_add(self.set_pic, pic)
                 pass
             pass
         #-print 'done'
@@ -327,7 +321,7 @@ class LatexMathExpressionsEditor(Gtk.Table):
         return
 
     def insert_latex_mark(self, view, mark, text=""):
-        '''在 Gtk.TextView 插入 LaTex 标记
+        '''在 gtk.TextView 插入 LaTex 标记
         '''
         buffer = view.get_buffer()
         bounds = buffer.get_selection_bounds()
@@ -348,9 +342,9 @@ class LatexMathExpressionsEditor(Gtk.Table):
         pass
 
 def latex_dlg(latex="", title=_("LaTeX math expressions"), parent=None):
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
     dlg.set_default_size(680, 400)
     editor = LatexMathExpressionsEditor(latex)
     dlg.vbox.pack_start(editor, True, True, 5)
@@ -358,7 +352,7 @@ def latex_dlg(latex="", title=_("LaTeX math expressions"), parent=None):
     resp = dlg.run()
     latex = editor.get_latex()
     dlg.destroy()
-    if resp == Gtk.ResponseType.OK:
+    if resp == gtk.RESPONSE_OK:
         return latex
     return None    
 
@@ -401,7 +395,7 @@ def tex2html(tex):
 
 
 if __name__=="__main__":
-    Gdk.threads_init()
+    gtk.gdk.threads_init()
     latex = ' '.join(sys.argv[1:]) or 'E=MC^2'
     latex = latex_dlg(latex)
     print latex

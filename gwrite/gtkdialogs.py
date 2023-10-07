@@ -7,16 +7,11 @@
 
 import os
 
-from gi.repository import Gtk
-from gi.repository import GLib
-from gi.repository import GObject
-from gi.repository import Gdk
+import gtk
+import gobject
 
 __all__ = ['error', 'info', 'inputbox', 'messagedialog', 'open', 'save', 'warning',
         'yesno']
-
-try: from gi.repository import GtkSource
-except: GtkSource = None
 
 try: import i18n
 except: from gettext import gettext as _
@@ -24,8 +19,8 @@ except: from gettext import gettext as _
 def colorbox(title="Changing color", previous_color='', current_color=''):
     '''
     '''
-    dialog = Gtk.ColorSelectionDialog("Changing color")
-    colorsel = dialog.get_color_selection()
+    dialog = gtk.ColorSelectionDialog("Changing color")
+    colorsel = dialog.colorsel
 
     if current_color:
         colorsel.set_previous_color(previous_color)
@@ -35,7 +30,7 @@ def colorbox(title="Changing color", previous_color='', current_color=''):
 
     response = dialog.run()
     htmlcolor = ''
-    if response == Gtk.ResponseType.OK:
+    if response == gtk.RESPONSE_OK:
         color = colorsel.get_current_color()
         rgb = (color.red, color.green, color.blue)
         htmlcolor = '#' + ''.join((str(hex(i/257))[2:].rjust(2, '0') for i in rgb))
@@ -43,76 +38,63 @@ def colorbox(title="Changing color", previous_color='', current_color=''):
     return htmlcolor
 
 def textbox(title='Text Box', label='Text',
-        parent=None, text='', lang=''):
+        parent=None, text=''):
     """display a text edit dialog
     
     return the text , or None
     """
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
     dlg.set_default_size(500,500)
-    #lbl = Gtk.Label(label)
+    #lbl = gtk.Label(label)
     #lbl.set_alignment(0, 0.5)
     #lbl.show()
     #dlg.vbox.pack_start(lbl,  False)
-    gscw = Gtk.ScrolledWindow()
-    gscw.set_shadow_type(Gtk.ShadowType.IN)    
-    #gscw.set_policy(Gtk.POLICY_NEVER, Gtk.PolicyType.AUTOMATIC)
-    gscw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-
-    if GtkSource:
-        textview = GtkSource.View()
-        lm = GtkSource.LanguageManager.get_default()
-        buffer = GtkSource.Buffer()
-        buffer.set_highlight_syntax(1)
-        if lang:
-            language = lm.get_language(lang)
-            buffer.set_language(language)
-            pass
-        textview.set_buffer(buffer)
-        pass
-    else:
-        textview=Gtk.TextView(buffer=None)
-        buffer = textview.get_buffer()
+    gscw = gtk.ScrolledWindow()
+    gscw.set_shadow_type(gtk.SHADOW_IN)    
+    #gscw.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+    gscw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    textview=gtk.TextView(buffer=None)
+    buffer = textview.get_buffer()
     
     if text:buffer.set_text(text)    
     
     #textview.show()
     gscw.add(textview)
     #gscw.show()
-    dlg.vbox.pack_start(gscw, True, True, 0)
+    dlg.vbox.pack_start(gscw)
     dlg.show_all()
     resp = dlg.run()
     
-    text=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter(), True)
+    text=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter())
     dlg.destroy()
-    if resp == Gtk.ResponseType.OK:
+    if resp == gtk.RESPONSE_OK:
         return text
     return None
 
 def combobox(title='ComboBox', label='ComboBox', parent=None, texts=['']):
     '''dialog with combobox
     '''
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
 
-    label1 = Gtk.Label(label)
+    label1 = gtk.Label(label)
     label1.set_alignment(0, 0.5)
     label1.set_padding(5, 5)
     label1.set_line_wrap(True)
     label1.show()
     dlg.vbox.pack_start(label1, False, False, 0)
 
-    combobox1_List = Gtk.ListStore(GObject.TYPE_STRING)
-    combobox1 = Gtk.ComboBox()
+    combobox1_List = gtk.ListStore(gobject.TYPE_STRING)
+    combobox1 = gtk.ComboBox()
     combobox1.show()
     #combobox1_List.append(["1122"])
 
     combobox1.set_model(combobox1_List)
 
-    cell = Gtk.CellRendererText()
+    cell = gtk.CellRendererText()
     combobox1.pack_start(cell, True)
     combobox1.add_attribute(cell, 'text', 0)
     dlg.vbox.pack_start(combobox1, True, True, 0)
@@ -125,7 +107,7 @@ def combobox(title='ComboBox', label='ComboBox', parent=None, texts=['']):
     t = combobox1.get_active()
     text = texts[t]
     dlg.destroy()
-    if resp == Gtk.ResponseType.CANCEL:
+    if resp == gtk.RESPONSE_CANCEL:
         return None        
     return text
 
@@ -136,58 +118,56 @@ def spinbox2(title='2 Spin Box', label1='value1:', label2='value2:',
     
     return (value1,value2) , or ()
     """
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
 
-    lbl = Gtk.Label(title)
+    lbl = gtk.Label(title)
     lbl.set_alignment(0, 0.5)
-    dlg.vbox.pack_start(lbl,  False, False, 0)
+    dlg.vbox.pack_start(lbl,  False)
     
-    #vbox1 = Gtk.VBox(False, 0)
+    #vbox1 = gtk.VBox(False, 0)
     #vbox1.show()
     #vbox1.set_spacing(0)
 
-    table2 = Gtk.Table()
+    table2 = gtk.Table()
     table2.show()
     table2.set_row_spacings(0)
     table2.set_col_spacings(0)
     
-    label1 = Gtk.Label(label1)
+    label1 = gtk.Label(label1)
     label1.set_alignment(0, 0.5)
     label1.set_padding(0, 0)
     label1.set_line_wrap(False)
     label1.show()
-    table2.attach(label1, 0, 1, 0, 1, Gtk.AttachOptions.FILL, 0, 0, 0)
+    table2.attach(label1, 0, 1, 0, 1, gtk.FILL, 0, 0, 0)
     
-    label2 = Gtk.Label(label2)
+    label2 = gtk.Label(label2)
     label2.set_alignment(0, 0.5)
     label2.set_padding(0, 0)
     label2.set_line_wrap(False)
     label2.show()
-    table2.attach(label2, 0, 1, 1, 2, Gtk.AttachOptions.FILL, 0, 0, 0)
+    table2.attach(label2, 0, 1, 1, 2, gtk.FILL, 0, 0, 0)
             
-    adj = Gtk.Adjustment(1.0, 1.0, 512.0, 1.0, 5.0, 0.0)
-    spin1 = Gtk.SpinButton()
-    spin1.set_adjustment(adj)
+    adj = gtk.Adjustment(1.0, 1.0, 512.0, 1.0, 5.0, 0.0)
+    spin1=gtk.SpinButton(adj,0,0)
     if value1: spin1.set_value(value1)    
-    table2.attach(spin1, 1, 2, 0, 1, Gtk.AttachOptions.EXPAND|Gtk.AttachOptions.FILL, 0, 0, 0)
+    table2.attach(spin1, 1, 2, 0, 1, gtk.EXPAND|gtk.FILL, 0, 0, 0)
 
-    adj2 = Gtk.Adjustment(1.0, 1.0, 512.0, 1.0, 5.0, 0.0)
-    spin2 = Gtk.SpinButton()
-    spin2.set_adjustment(adj2)
+    adj2 = gtk.Adjustment(1.0, 1.0, 512.0, 1.0, 5.0, 0.0)
+    spin2=gtk.SpinButton(adj2,0,0)
     if value2: spin2.set_value(value2)
-    table2.attach(spin2, 1, 2, 1, 2, Gtk.AttachOptions.EXPAND|Gtk.AttachOptions.FILL, 0, 0, 0)
+    table2.attach(spin2, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL, 0, 0, 0)
     
     #vbox1.pack_start(table2, True, True, 0)
-    dlg.vbox.pack_start(table2, True, True, 0)
+    dlg.vbox.pack_start(table2)
     dlg.show_all()
     
     resp = dlg.run()    
     value1=spin1.get_value()
     value2=spin2.get_value()
     dlg.hide()    
-    if resp == Gtk.ResponseType.CANCEL:
+    if resp == gtk.RESPONSE_CANCEL:
         return ()    
     return (value1,value2)
         
@@ -198,22 +178,22 @@ def inputbox(title='Input Box', label='Please input the value',
     return text , or None
     """
     #@TODO: 要直接回车确定
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
-    lbl = Gtk.Label(label)
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
+    lbl = gtk.Label(label)
     lbl.set_alignment(0, 0.5)
     lbl.show()
-    dlg.vbox.pack_start(lbl, False, False, 0)
-    entry = Gtk.Entry()
+    dlg.vbox.pack_start(lbl)
+    entry = gtk.Entry()
     if text: entry.set_text(text)
     entry.show()
-    dlg.vbox.pack_start(entry, False, True, 0)
-    dlg.set_default_response(Gtk.ResponseType.OK)
+    dlg.vbox.pack_start(entry, False)
+    dlg.set_default_response(gtk.RESPONSE_OK)
     resp = dlg.run()
     text = entry.get_text()
     dlg.hide()
-    if resp == Gtk.ResponseType.CANCEL:
+    if resp == gtk.RESPONSE_CANCEL:
         return None
     return text
 
@@ -224,59 +204,59 @@ def inputbox2(title='2 Input Box', label1='value1:', label2='value2:',
     return (text1,text2) , or ()
     """
     strlabel2 = label2
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
     
-    lbl = Gtk.Label(title)
+    lbl = gtk.Label(title)
     lbl.set_alignment(0, 0.5)
     dlg.vbox.pack_start(lbl,  False)
     
-    table1 = Gtk.Table()
+    table1 = gtk.Table()
     table1.show()
     table1.set_row_spacings(0)
     table1.set_col_spacings(0)
     
-    label2 = Gtk.Label(label1)
+    label2 = gtk.Label(label1)
     label2.set_alignment(0.5, 0.5)
     label2.set_padding(0, 0)
     label2.set_line_wrap(False)
     label2.show()
-    table1.attach(label2, 0, 1, 0, 1, Gtk.AttachOptions.FILL, 0, 0, 0)
+    table1.attach(label2, 0, 1, 0, 1, gtk.FILL, 0, 0, 0)
     
-    entry2 = Gtk.Entry()
+    entry2 = gtk.Entry()
     entry2.set_text("")
     entry2.set_editable(True)
     entry2.show()
     entry2.set_visibility(True)
-    table1.attach(entry2, 1, 2, 0, 1, Gtk.AttachOptions.EXPAND|Gtk.AttachOptions.FILL, 0, 0, 0)
+    table1.attach(entry2, 1, 2, 0, 1, gtk.EXPAND|gtk.FILL, 0, 0, 0)
     
-    label3 = Gtk.Label(strlabel2)
+    label3 = gtk.Label(strlabel2)
     label3.set_alignment(0, 0.5)
     label3.set_padding(0, 0)
     label3.set_line_wrap(False)
     label3.show()
-    table1.attach(label3, 0, 1, 1, 2, Gtk.AttachOptions.FILL, 0, 0, 0)
+    table1.attach(label3, 0, 1, 1, 2, gtk.FILL, 0, 0, 0)
 
-    entry3 = Gtk.Entry()
+    entry3 = gtk.Entry()
     entry3.set_text("")
     entry3.set_editable(True)
     entry3.show()
     entry3.set_visibility(True)
-    table1.attach(entry3, 1, 2, 1, 2, Gtk.AttachOptions.EXPAND|Gtk.AttachOptions.FILL, 0, 0, 0)
+    table1.attach(entry3, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL, 0, 0, 0)
     
     if text1: entry2.set_text(text1)
     if text2: entry3.set_text(text2)
 
     dlg.vbox.pack_start(table1)
-    dlg.set_default_response(Gtk.ResponseType.OK)
+    dlg.set_default_response(gtk.RESPONSE_OK)
     dlg.show_all()
     
     resp = dlg.run()
     text1 = entry2.get_text()
     text2 = entry3.get_text()
     dlg.hide()
-    if resp == Gtk.ResponseType.CANCEL:
+    if resp == gtk.RESPONSE_CANCEL:
         return ()
     return (text1,text2)    
 
@@ -284,9 +264,9 @@ def savechanges(text=_("Save Changes?"), parent=None):
     '''Save Changes?
     return 1, -1, 0 => yes, no, cancel
     '''
-    d = Gtk.MessageDialog(parent=parent, flags=Gtk.DialogFlags.MODAL,
-            type=Gtk.MessageType.INFO,)
-    d.add_buttons(Gtk.STOCK_YES, 1, Gtk.STOCK_NO, -1, Gtk.STOCK_CANCEL, 0)
+    d = gtk.MessageDialog(parent=parent, flags=gtk.DIALOG_MODAL,
+            type=gtk.MESSAGE_INFO,)
+    d.add_buttons(gtk.STOCK_YES, 1, gtk.STOCK_NO, -1, gtk.STOCK_CANCEL, 0)
     d.set_markup(text)
     d.show_all()
     response = d.run()
@@ -296,17 +276,17 @@ def savechanges(text=_("Save Changes?"), parent=None):
 def infotablebox(title=_("Info"), short=_("Info"), info=[[_("Key:"), _("Value")]], parent=None):
     '''show info table box
     '''
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
-    label = Gtk.Label()
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
+    label = gtk.Label()
     label.set_markup(short)
     label.set_padding(20, 10)
     label.set_alignment(0, 0)
     label.show()
     dlg.vbox.pack_start(label, False, False, 0)
     ##
-    table = Gtk.Table()
+    table = gtk.Table()
     table.show()
     # table
     y = 0
@@ -314,7 +294,7 @@ def infotablebox(title=_("Info"), short=_("Info"), info=[[_("Key:"), _("Value")]
         x = 0
         left = 0
         for text in line:
-            label = Gtk.Label()
+            label = gtk.Label()
             #label.set_selectable(1) # 会干扰编辑区选中状态
             label.set_padding(10, 3)
             label.set_alignment(left, 0)
@@ -333,8 +313,8 @@ def infotablebox(title=_("Info"), short=_("Info"), info=[[_("Key:"), _("Value")]
 
 
 def messagedialog(dialog_type, short, long=None, parent=None,
-                buttons=Gtk.ButtonsType.OK, additional_buttons=None):
-    d = Gtk.MessageDialog(parent=parent, flags=Gtk.DialogFlags.MODAL,
+                buttons=gtk.BUTTONS_OK, additional_buttons=None):
+    d = gtk.MessageDialog(parent=parent, flags=gtk.DIALOG_MODAL,
                         type=dialog_type, buttons=buttons)
     
     if additional_buttons:
@@ -343,15 +323,15 @@ def messagedialog(dialog_type, short, long=None, parent=None,
     d.set_markup(short)
     
     if long:
-        if isinstance(long, Gtk.Widget):
+        if isinstance(long, gtk.Widget):
             widget = long
         elif isinstance(long, basestring):
-            widget = Gtk.Label()
+            widget = gtk.Label()
             widget.set_markup(long)
         else:
-            raise TypeError("long must be a Gtk.Widget or a string")
+            raise TypeError("long must be a gtk.Widget or a string")
         
-        expander = Gtk.Expander(_("Click here for details"))
+        expander = gtk.Expander(_("Click here for details"))
         expander.set_border_width(6)
         expander.add(widget)
         d.vbox.pack_end(expander)
@@ -363,25 +343,25 @@ def messagedialog(dialog_type, short, long=None, parent=None,
     
 def error(short, long=None, parent=None):
     """Displays an error message."""
-    return messagedialog(Gtk.MessageType.ERROR, short, long, parent)
+    return messagedialog(gtk.MESSAGE_ERROR, short, long, parent)
 
 def info(short, long=None, parent=None):
     """Displays an info message."""
-    return messagedialog(Gtk.MessageType.INFO, short, long, parent)
+    return messagedialog(gtk.MESSAGE_INFO, short, long, parent)
 
 def warning(short, long=None, parent=None):
     """Displays a warning message."""
-    return messagedialog(Gtk.MessageType.WARNING, short, long, parent)
+    return messagedialog(gtk.MESSAGE_WARNING, short, long, parent)
 
 def yesno(text="OK ?", parent=None):
     """
     
     return 1 or 0 . ( yes/no )
     """
-##    return messagedialog(Gtk.MessageType.WARNING, text, None, parent,
-##        buttons=Gtk.ButtonsType.YES_NO)
-    i = messagedialog(Gtk.MessageType.INFO, text, None, parent,
-        buttons=Gtk.ButtonsType.YES_NO)
+##    return messagedialog(gtk.MESSAGE_WARNING, text, None, parent,
+##        buttons=gtk.BUTTONS_YES_NO)
+    i = messagedialog(gtk.MESSAGE_INFO, text, None, parent,
+        buttons=gtk.BUTTONS_YES_NO)
     if i == -8:
         return 1
     return 0
@@ -391,27 +371,27 @@ def open(title='', parent=None,
     """Displays an open dialog.
     
     return the  full path , or None"""
-    filechooser = Gtk.FileChooserDialog(title or _('Open'),
+    filechooser = gtk.FileChooserDialog(title or _('Open'),
                     parent,
-                    Gtk.FileChooserAction.OPEN,
-                    (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-                    Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+                    gtk.FILE_CHOOSER_ACTION_OPEN,
+                    (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                    gtk.STOCK_OPEN, gtk.RESPONSE_OK))
 
     if patterns:
-        file_filter = Gtk.FileFilter()
+        file_filter = gtk.FileFilter()
         for pattern in patterns:
             file_filter.add_pattern(pattern)
         filechooser.set_filter(file_filter)
         pass
     if mimes:
-        file_filter = Gtk.FileFilter()
+        file_filter = gtk.FileFilter()
         for mime in mimes:
             file_filter.add_mime_type(mime)
         filechooser.add_filter(file_filter)
         pass
     if name_mimes:
         for name, mime in name_mimes:
-            file_filter = Gtk.FileFilter()
+            file_filter = gtk.FileFilter()
             file_filter.set_name(name)
             file_filter.add_mime_type(mime)
             filechooser.add_filter(file_filter)
@@ -419,18 +399,18 @@ def open(title='', parent=None,
         name_patterns += [[_("All Files"), "*"]]
         pass
     for name, pattern in name_patterns:
-            file_filter = Gtk.FileFilter()
+            file_filter = gtk.FileFilter()
             file_filter.set_name(name)
             file_filter.add_pattern(pattern)
             filechooser.add_filter(file_filter)
 
-    filechooser.set_default_response(Gtk.ResponseType.OK)
+    filechooser.set_default_response(gtk.RESPONSE_OK)
 
     if folder:
         filechooser.set_current_folder(folder)
         
     response = filechooser.run()
-    if response != Gtk.ResponseType.OK:
+    if response != gtk.RESPONSE_OK:
         filechooser.destroy()
         return
     
@@ -454,27 +434,27 @@ def save(title='', parent=None, current_name='',
     
     return the  full path , or None
     """
-    filechooser = Gtk.FileChooserDialog(title or _('Save'),
+    filechooser = gtk.FileChooserDialog(title or _('Save'),
                 parent,
-                Gtk.FileChooserAction.SAVE,
-                (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_SAVE, Gtk.ResponseType.OK))
+                gtk.FILE_CHOOSER_ACTION_SAVE,
+                (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                gtk.STOCK_SAVE, gtk.RESPONSE_OK))
 
     if patterns:
-        file_filter = Gtk.FileFilter()
+        file_filter = gtk.FileFilter()
         for pattern in patterns:
             file_filter.add_pattern(pattern)
         filechooser.set_filter(file_filter)
         pass
     if mimes:
-        file_filter = Gtk.FileFilter()
+        file_filter = gtk.FileFilter()
         for mime in mimes:
             file_filter.add_mime_type(mime)
         filechooser.add_filter(file_filter)
         pass
     if name_mimes:
         for name, mime in name_mimes:
-            file_filter = Gtk.FileFilter()
+            file_filter = gtk.FileFilter()
             file_filter.set_name(name)
             file_filter.add_mime_type(mime)
             filechooser.add_filter(file_filter)
@@ -482,14 +462,14 @@ def save(title='', parent=None, current_name='',
         name_patterns += [[_("All Files"), "*"]]
         pass
     for name, pattern in name_patterns:
-            file_filter = Gtk.FileFilter()
+            file_filter = gtk.FileFilter()
             file_filter.set_name(name)
             file_filter.add_pattern(pattern)
             filechooser.add_filter(file_filter)
                 
     if current_name:
         filechooser.set_current_name(current_name)       
-    filechooser.set_default_response(Gtk.ResponseType.OK)
+    filechooser.set_default_response(gtk.RESPONSE_OK)
     
     if folder:
         filechooser.set_current_folder(folder)
@@ -497,7 +477,7 @@ def save(title='', parent=None, current_name='',
     path = None
     while True:
         response = filechooser.run()
-        if response != Gtk.ResponseType.OK:
+        if response != gtk.RESPONSE_OK:
             path = None
             break
         
@@ -509,16 +489,16 @@ def save(title='', parent=None, current_name='',
         submsg2 = _('Do you which to replace it with the current project?')
         text = '<span weight="bold" size="larger">%s</span>\n\n%s\n' % \
             (submsg1, submsg2)
-        result = messagedialog(Gtk.MessageType.ERROR,
+        result = messagedialog(gtk.MESSAGE_ERROR,
                     text,
                     parent=parent,
-                    buttons=Gtk.ButtonsType.NONE,
-                    additional_buttons=(Gtk.STOCK_CANCEL,
-                            Gtk.ResponseType.CANCEL,
+                    buttons=gtk.BUTTONS_NONE,
+                    additional_buttons=(gtk.STOCK_CANCEL,
+                            gtk.RESPONSE_CANCEL,
                             _("Replace"),
-                            Gtk.RESPONSE_YES))
+                            gtk.RESPONSE_YES))
         # the user want to overwrite the file
-        if result == Gtk.RESPONSE_YES:
+        if result == gtk.RESPONSE_YES:
             break
 
     filechooser.destroy()
@@ -538,7 +518,7 @@ def test():
     #-print info(short='This is a InfoBox', long='the long message')
     #-print yesno(text='Are you OK?')
     #-print savechanges()
-    error('An error occurred', Gtk.Button('Woho'))
+    error('An error occurred', gtk.Button('Woho'))
     error('An error occurred',
         'Long description bla bla bla bla bla bla bla bla bla\n'
         'bla bla bla bla bla lblabl lablab bla bla bla bla bla\n'

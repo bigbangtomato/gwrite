@@ -7,24 +7,14 @@
 
 __version__ = '0.5.1'
 
-from gi.repository import Gtk
-from gi.repository import GLib
-from gi.repository import GObject
-from gi.repository import Gdk
-from gi.repository import WebKit
-
+import gtk, gobject
+import webkit
+import jswebkit
 import gtklatex
 import urllib2
 import os, errno
 import re
 import docfilter
-import highlight
-
-import json
-
-import sys
-reload(sys)
-sys.setdefaultencoding('utf8')
 
 try: import i18n
 except: from gettext import gettext as _
@@ -36,7 +26,7 @@ def format_html(html):
     html = re.sub('</(address|blockquote|center|dir|div|dl|fieldset|form|h1|h2|h3|h4|h5|h6|hr|isindex|menu|noframes|noscript|ol|p|pre|table|ul|dd|dt|frameset|li|tbody|td|tfoot|th|thead|tr)([^>]*?)>\ ?\n?', '</\\1\\2>\n', html)
     html = re.sub('\n?<(img|hr|br)([^>]*?)>\n?', '\n<\\1\\2>\n', html)
     ## 对于 pre，合并相邻 <pre>，将 <pre> 内的 <br> 转为 "\n"
-    html = re.sub('\n?</pre>\s*<pre>\n?', '\n', html)
+    html = re.sub('\n?</pre>\s*<pre>\n?', '', html)
     html = re.sub('<pre>[^\0]*?</pre>', lambda m: re.sub('\n?<br>\n?', '\\n', m.group()), html)
     return html
 
@@ -68,18 +58,18 @@ def textbox(title='Text Box', label='Text',
     
     return the text , or None
     """
-    dlg = Gtk.Dialog(title, parent, Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK    ))
+    dlg = gtk.Dialog(title, parent, gtk.DIALOG_DESTROY_WITH_PARENT,
+            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+            gtk.STOCK_OK, gtk.RESPONSE_OK    ))
     dlg.set_default_size(500,500)
-    #lbl = Gtk.Label(label)
+    #lbl = gtk.Label(label)
     #lbl.set_alignment(0, 0.5)
     #lbl.show()
     #dlg.vbox.pack_start(lbl,  False)
-    gscw = Gtk.ScrolledWindow()
-    gscw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-    textview=Gtk.TextView()
-    textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+    gscw = gtk.ScrolledWindow()
+    gscw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    textview=gtk.TextView()
+    textview.set_wrap_mode(gtk.WRAP_WORD_CHAR)
     buffer = textview.get_buffer()
     
     if text: buffer.set_text(text)    
@@ -93,7 +83,7 @@ def textbox(title='Text Box', label='Text',
     
     text=buffer.get_text(buffer.get_start_iter(),buffer.get_end_iter())
     dlg.destroy()
-    if resp == Gtk.ResponseType.OK:
+    if resp == gtk.RESPONSE_OK:
         return text
     return None
 
@@ -152,20 +142,6 @@ code{
     margin: 15px;
     padding: 5px;
 }
-#toctitle {
-    -webkit-transition: all .3s ease-out-in;
-}
-#toctitle::-webkit-scrollbar {
-    width: 3.5px;
-    height: 3.5px;
-}
-#toctitle::-webkit-scrollbar-thumb:horizontal {
-    background-color: #D35D22;
-}
-#WebKit-Editing-Delete-Button {
-    border: none;
-    padding: 0px;
-}
   </style>
 </head>
 <body>
@@ -174,13 +150,13 @@ code{
 </html>
 '''
 
-class WebKitEdit(WebKit.WebView):
+class WebKitEdit(webkit.WebView):
     '''Html Edit Widget
     '''
     def __init__(self, editfile=''):
         '''WebKitEdit.__init__
         '''
-        WebKit.WebView.__init__(self)
+        webkit.WebView.__init__(self)
         self.set_property('can-focus', True)
         self.set_property('can-default', True)
         self.set_full_content_zoom(1)
@@ -200,7 +176,7 @@ class WebKitEdit(WebKit.WebView):
         self.connect("navigation-requested", self.on_navigation_requested)
         self.connect("new-window-policy-decision-requested", self.on_new_window_policy_decision_requested)
         self.connect_after("populate-popup", self.populate_popup)
-        self.connect("script-alert", self.on_script_alert)
+        self.connect("script-prompt", self.on_script_prompt)
 
         ## 允许跨域 XMLHttpRequest，以便 base64 内联图片
         settings = self.get_settings()
@@ -230,20 +206,19 @@ class WebKitEdit(WebKit.WebView):
         elif re.match('.*\.rtf', editfile, re.I):
             pass
         ## 打开 html
-        WebKit.WebView.open(self, editfile)
+        webkit.WebView.open(self, editfile)
         pass
 
-    def eval(self, js):
-        '''执行 javascript
+    def ctx(self, *args):
+        '''获取 javascript ctx 对象
         '''
-        d = self.get_dom_document()
-        ddw = d.get_default_view()
-        ddw.set_status(js)
-        self.execute_script('''
-            window.status = JSON.stringify( eval(window.status) );
-        ''')
-        m = ddw.get_status()
-        return m and json.loads(m) or ''
+        ctx = jswebkit.JSContext(self.get_main_frame().get_global_context())
+        return ctx
+
+    def eval(self, js):
+        '''用 ctx 对象执行 javascript
+        '''
+        return self.ctx().EvaluateScript(js)
 
     def get_html(self, *args):
         '''获取 HTML 内容
@@ -251,10 +226,9 @@ class WebKitEdit(WebKit.WebView):
         if not self.get_view_source_mode():
             self.execute_script('guesstitle();')
             self.do_image_base64()
-            domdocument = self.get_dom_document()
-            html = domdocument.get_document_element().get_outer_html()
+            html = self.ctx().EvaluateScript('document.documentElement.innerHTML')
             html = format_html(html)
-            return '<!DOCTYPE html>\n' + html
+            return '<!DOCTYPE html>\n<html>\n%s\n</html>\n' % html
         else:
             text = self.eval('''
                 html = document.body.innerHTML;
@@ -279,7 +253,7 @@ class WebKitEdit(WebKit.WebView):
     def get_selection(self, *args):
         '''获取选中区域的文本
         '''
-        text = self.eval('''
+        text = self.ctx().EvaluateScript('''
             document.getSelection().toString();
         ''')
         return text
@@ -289,15 +263,25 @@ class WebKitEdit(WebKit.WebView):
 
         处理过换行
         '''
-        text = self.eval('''
-            text = document.body.innerText;
+        text = self.ctx().EvaluateScript('''
+            //text = document.body.textContent;
+            html = document.body.innerHTML;
+            html = html.replace(/<h/g, '\\n<h');
+            html = html.replace(/<p/g, '\\n<p');
+            html = html.replace(/<t/g, '\\n<t');
+            html = html.replace(/<br/g, '\\n<br');
+            html = html.replace(/<bl/g, '\\n<bl');
+            html = html.replace(/<div/g, '\\n<div');
+            i = document.createElement("div");
+            i.innerHTML = html;
+            text = i.textContent;
             text;''')
         return text
 
     def set_saved(self, *args):
         '''设置为已经保存
         '''
-        self._html = self.eval('document.documentElement.innerHTML')
+        self._html = self.ctx().EvaluateScript('document.documentElement.innerHTML')
         pass
 
     def unset_saved(self, *args):
@@ -309,7 +293,7 @@ class WebKitEdit(WebKit.WebView):
     def is_saved(self, *args):
         '''查询是否已经保存
         '''
-        return self._html == self.eval('document.documentElement.innerHTML')
+        return self._html == self.ctx().EvaluateScript('document.documentElement.innerHTML')
 
     def on_new_window_policy_decision_requested(self, widget,
             WebKitWebFrame, WebKitNetworkRequest, 
@@ -322,11 +306,14 @@ class WebKitEdit(WebKit.WebView):
         os.spawnvp(os.P_NOWAIT, 'xdg-open', ['xdg-open', uri])
         return True
 
-    def on_script_alert(self, view, frame, msg, *args):
-        if msg.startswith('_#uptex:'):
-            a, id, m, latex = msg.split(':', 3)
-            print id, latex
-            latex = latex.replace('\\n', '\n').replace('\\\\', '\\')
+    def on_script_prompt(self, view, WebKitWebFrame, key, value, gpointer):
+        '''处理 script-prompt 事件
+        '''
+        #-print key, value
+        ## 更新 LaTex 公式的情况
+        if key.startswith('_#uptex:'):
+            id = key[8:]
+            latex = value[8:].replace('\\\\', '\\')
             latex = gtklatex.latex_dlg(latex)
             if latex:
                 img = gtklatex.tex2base64(latex)
@@ -334,12 +321,12 @@ class WebKitEdit(WebKit.WebView):
                     window.focus();
                     img = document.getElementById('%s');
                     img.alt = "mimetex:"+"%s";
-                    img.src = '%s';
+                    img.src='%s';
                 """ % (id, stastr(latex), stastr(img)))
                 pass
             self.execute_script("""document.getElementById('%s').removeAttribute("id");""" % id)
             return True
-        return False
+        return
 
     def on_navigation_requested(self, widget, WebKitWebFrame, WebKitNetworkRequest):
         '''处理点击链接事件
@@ -368,11 +355,9 @@ class WebKitEdit(WebKit.WebView):
         '''处理编辑区右键菜单
         '''
         # 无格式粘贴菜单
-        cb = self.get_clipboard(Gdk.Atom.intern_static_string('CLIPBOARD'))
-        cbp = self.get_clipboard(Gdk.Atom.intern_static_string('PRIMARY'))
-        text = cb.wait_for_text() or cbp.wait_for_text()
+        text = gtk.Clipboard().wait_for_text() or gtk.Clipboard(selection="PRIMARY").wait_for_text()
         if text:
-            menuitem_paste_unformatted = Gtk.ImageMenuItem(_("Pa_ste Unformatted"))
+            menuitem_paste_unformatted = gtk.ImageMenuItem(_("Pa_ste Unformatted"))
             menuitem_paste_unformatted.show()
             #menuitem_paste_unformatted.connect("activate", self.do_paste_unformatted)
             menuitem_paste_unformatted.connect("activate", 
@@ -418,11 +403,11 @@ class WebKitEdit(WebKit.WebView):
         '''
         if not anc: anc = widget
         anc = anc.replace('#', '')
-        # return self.execute_script("window.location.href='#%s';" % anc);
+        #return self.execute_script("window.location.href='#%s';" % anc);
         self.execute_script("""
-            el = document.getElementById("%s");
-            window.scrollTo(0, el.offsetTop);
-            """ % anc)
+        el = document.getElementById("%s");
+        window.scrollTo(0, el.offsetTop);
+        """ % anc)
         pass
 
     def write_html(self, html):
@@ -455,9 +440,9 @@ class WebKitEdit(WebKit.WebView):
         '''更新正文 html
         '''
         #print 'WebKitEdit.update_bodyhtml:'
-        d = self.get_dom_document()
-        body = d.get_body()
-        body.set_innerHTML(html)
+        self.execute_script(r''' 
+                document.body.innerHTML="%s";
+                '''%stastr(html))
         pass
 
     def do_editable(self, *args):
@@ -467,25 +452,6 @@ class WebKitEdit(WebKit.WebView):
         #-print 'WebKitEdit.set_editable:'
         #cmd = r''' document.documentElement.contentEditable="true"; '''
         self.set_editable(1)
-        if self.get_view_source_mode():
-            # 隐藏源码编辑模式下的 webkit 删除工具
-            # webkit 编辑模式下会有
-            #   #WebKit-Editing-Delete-Container
-            #   #WebKit-Editing-Delete-Outline
-            #   #WebKit-Editing-Delete-Button
-            # 几个 div 和 img 删除控件，
-            # 在编辑模式的源码表格下会影响使用，所以需要隐藏掉
-            # 默认源码模式下 styleSheets 是空的，所以得先插入一个 <style>
-            self.execute_script('''
-                s = document.createElement('style')
-                document.body.appendChild(s);
-                setTimeout(function() {
-                    document.styleSheets[0].insertRule('#WebKit-Editing-Delete-Container {display: none;}', 0);
-                    document.styleSheets[0].insertRule('#WebKit-Editing-Delete-Outline {display: none;}', 0);
-                    document.styleSheets[0].insertRule('#WebKit-Editing-Delete-Button {display: none;}', 0);
-                }, 100);
-            ''')
-            pass
         cmd = r''' 
             /*document.documentElement.contentEditable="true";*/
             /*document.body.contentEditable="true";*/
@@ -514,10 +480,19 @@ class WebKitEdit(WebKit.WebView):
             /* 目录处理 */
             function getheads(){
                 /* 取得所有 heading 标签到 heads */
-                return document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                tags = document.getElementsByTagName("*");
+                heads = new Array();
+                for (var i=0; i<tags.length; i++){
+                    t = tags[i].nodeName;
+                    if (t == "H1" || t == "H2" || t == "H3" || t == "H4" || 
+                            t == "H5" || t == "H6"){
+                        heads.push(tags[i]);
+                    }
+                }
+                return heads;
             };
             
-            var autonu = 0;
+            autonu = 0;
             if( i = document.body.getAttribute("orderedheadings")){
                 autonu = i;
             }
@@ -541,24 +516,22 @@ class WebKitEdit(WebKit.WebView):
             }
             
             function getdir(){
-                var heads = getheads();
-                var tt = '';
-                var tdir = '';
-                var h1 = 0;
-                var h2 = 0;
-                var h3 = 0;
-                var h4 = 0;
-                var h5 = 0;
-                var h6 = 0;
-                var startHeader = 0;
-                var startHeader = 1;
-                var g = '';
+                heads = getheads();
+                tt = '';
+                tdir = '';
+                h1 = 0;
+                h2 = 0;
+                h3 = 0;
+                h4 = 0;
+                h5 = 0;
+                h6 = 0;
+                startHeader = 0;
+                startHeader = 1;
                 
                 for (var i=startHeader ; i<heads.length; i++){
-                    var inode = heads[i];
+                    inode = heads[i];
                     iname = inode.textContent.replace(/^\s*[.\d]*\s+/, ''); /*把标题前边的数字识别为序号*/
                     iname = iname.replace('\n',' ');
-                    g = (inode.id.replace(/[.0-9]/g,'') || g.replace(/[.0-9]/g,'') || Math.random().toString(36).replace(/[.0-9]/g,'')) + '.';
                     switch(heads[i].nodeName){
                         case "H1":
                         tt = '';
@@ -569,7 +542,7 @@ class WebKitEdit(WebKit.WebView):
                         h5 = 0;
                         h6 = 0;
                         tt += String(h1);
-                        inode.id = g + tt;
+                        inode.id = "g" + tt;
                         inode.textContent = getiname(tt, name);   
                         tdir += '';
                         tdir += '<a href="#g' + tt + '">' + getiname(tt, name) + '</a>\n';
@@ -583,7 +556,7 @@ class WebKitEdit(WebKit.WebView):
                         h5 = 0;
                         h6 = 0;
                         tt += String(h1) + '.' + h2;
-                        inode.id = g + tt;
+                        inode.id = "g" + tt;
                         inode.textContent = getiname(tt, name);           
                         tdir += ' ';
                         tdir += '<a href="#g' + tt + '">' + getiname(tt, name) + '</a>\n';
@@ -596,7 +569,7 @@ class WebKitEdit(WebKit.WebView):
                         h5 = 0;
                         h6 = 0;
                         tt += String(h1) + '.' + h2 + '.' + h3;
-                        inode.id = g + tt;
+                        inode.id = "g" + tt;
                         inode.textContent = getiname(tt, name);           
                         tdir += '  ';
                         tdir += '<a href="#g' + tt + '">' + getiname(tt, name) + '</a>\n';
@@ -608,7 +581,7 @@ class WebKitEdit(WebKit.WebView):
                         h5 = 0;
                         h6 = 0;
                         tt += String(h1) + '.' + h2 + '.' + h3 + '.' +h4;
-                        inode.id = g + tt;
+                        inode.id = "g" + tt;
                         inode.textContent = getiname(tt, name);           
                         tdir += '   ';
                         tdir += '<a href="#g' + tt + '">' + getiname(tt, name) + '</a>\n';
@@ -619,7 +592,7 @@ class WebKitEdit(WebKit.WebView):
                         h5 += 1;
                         h6 = 0;
                         tt += String(h1) + '.' + h2 + '.' + h3 + '.' + h4 + '.' + h5;
-                        inode.id = g + tt;
+                        inode.id = "g" + tt;
                         inode.textContent = getiname(tt, name);           
                         tdir += '    ';
                         tdir += '<a href="#g' + tt + '">' + getiname(tt, name) + '</a>\n';
@@ -629,7 +602,7 @@ class WebKitEdit(WebKit.WebView):
                         tt = '';
                         h6 += 1;
                         tt += String(h1) + '.' + h2 + '.' + h3 + '.' + h4 + '.' + h5 + '.' + h6;
-                        inode.id = g + tt;
+                        inode.id = "g" + tt;
                         inode.textContent = getiname(tt, name);           
                         tdir += '     ';
                         tdir += '<a href="#g' + tt + '">' + getiname(tt, name) + '</a>\n';
@@ -654,13 +627,18 @@ class WebKitEdit(WebKit.WebView):
                 return dirhtml;
             };
 
-            function  randomChars()  {
-                return Math.random().toString(16).slice(2);
+            function  randomChar(l)  {
+                var  x="0123456789qwertyuioplkjhgfdsazxcvbnm";
+                var  tmp="";
+                for(var  i=0;i<  l;i++)  {
+                    tmp  +=  x.charAt(Math.ceil(Math.random()*100000000)%x.length);
+                }
+                return  tmp;
             }
 
             function uptex(img){
-                img.id = 'mimetex_' + randomChars();
-                alert("_#uptex:" + img.id + ':' + img.alt);
+                img.id = 'mimetex_' + randomChar(5);
+                prompt("_#uptex:"+img.id, img.alt);
             }
                         
             window.focus();
@@ -668,51 +646,12 @@ class WebKitEdit(WebKit.WebView):
         self.execute_script(cmd)
         pass
 
-    def do_image_base64(self, use_canvas=False):
+    def do_image_base64(self, *args):
         '''convert images to base64 inline image
         see http://tools.ietf.org/html/rfc2397
-        当 use_canvas=True 时会使用异步操作，图片会用 jpeg 80% 减小体积
         '''
-        Gdk.threads_leave() # 修正线程问题
-        if use_canvas:
-            self.execute_script(r'''
-    var make_images_inline = function(doc){
-        doc = doc || document.body;
-        var image2dataurl = function(img) {
-            if (img.src.match(/^data:/)) { return img.src }
-            //img.crossOrigin = "Anonymous";
-            var canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            var ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0);
-            var dataURL = canvas.toDataURL("image/jpeg", 0.8);
-            return dataURL;
-        }
-        var make_image_inline = function(img) {
-            if (img.src.match(/^data:/)) { return 0; }
-            if (img.complete) {
-                img.setAttribute('data-src', img.src);
-                img.src = image2dataurl(img);
-            } else {
-                img.onload = function() {
-                    make_image_inline(img);
-                };
-            }
-        }
-        var images = doc.querySelectorAll('img');
-        for (var i=images.length-1; i+1; i--){
-            img = images[i];
-            try {
-              make_image_inline(img);
-            } catch(e){
-            }
-        }
-    };
-    make_images_inline();
-        ''')
-        else:
-            self.execute_script(r'''
+        gtk.gdk.threads_leave() # 修正线程问题
+        self.execute_script(r'''
         var keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
         function encode64(input) {
            var output = "";
@@ -791,7 +730,7 @@ class WebKitEdit(WebKit.WebView):
                 else:
                     self.__prev_source_html = ''
                 pass
-            GObject.idle_add(do_is_saved)
+            gobject.idle_add(do_is_saved)
             pass
         ## 从源码模式转到所见所得模式
         else:
@@ -800,7 +739,7 @@ class WebKitEdit(WebKit.WebView):
             self.reload()
             if self.__prev_source_html == html:
                 self.update_html(self.__prev_visual_html)
-                GObject.idle_add(self.set_saved)
+                gobject.idle_add(self.set_saved)
                 pass
             else:
                 self.update_html(html)
@@ -850,7 +789,7 @@ class WebKitEdit(WebKit.WebView):
         '''无格式粘贴
         '''
         #-print 'do_paste_unformatted:'
-        text = Gtk.Clipboard().wait_for_text() or Gtk.Clipboard(selection="PRIMARY").wait_for_text()
+        text = gtk.Clipboard().wait_for_text() or gtk.Clipboard(selection="PRIMARY").wait_for_text()
         if text:
             self.do_insert_text(text)
             return
@@ -1001,9 +940,9 @@ class WebKitEdit(WebKit.WebView):
             ><div title="点击固定目录" onclick=\' t = document.getElementById("toctitle"); if(this.alt){ this.alt = 0; document.body.style.cssText=" "; t.style.cssText="\
                 text-indent: 0; background-color:#EEEEFF; display: block; border: 1px solid green; margin: 15px; padding: 5px; white-space: pre; "\
             ; }else{ this.alt = 1; document.body.style.cssText="\
-            margin:5pt; border:5pt; height:100%; margin-right: 210px; overflow-y:auto;"\
+            margin:5pt; border:5pt; height:100%; width:70%; overflow-y:auto;"\
             ; t.style.cssText="\
-            text-indent: 0; background-color:#EEEEFF; display: block; border-left: 1px solid green; margin: 0px; margin-bottom:3px; padding: 5px; white-space: pre; top:0px; right:0; width: 200px; height:98%; overflow:auto; position:fixed; "\
+                text-indent: 0; background-color:#EEEEFF; display: block; border-left: 1px solid green; margin: 0px; padding: 5px; white-space: pre; top:0px; right:0; width:25%; height:98%; overflow:auto; position:fixed; "\
             ; } \' class="dirtitle">目录<br/></div><span id="toctitledir"> </span></div><br/>';
             document.execCommand("inserthtml", false, html); 
             updatedir();
@@ -1100,9 +1039,9 @@ class WebKitEdit(WebKit.WebView):
     def do_formatblock_div(self, *args):
         ''' DIV 样式
         '''
-        #print 'WebKitEdit.formatblock_div:'
+        #print 'WebKitEdit.formatblock_addres:'
         return self.eval('''
-                document.execCommand("formatblock", false, "div"); ''')
+                document.execCommand("div", false, "address"); ''')
         pass
 
     def do_formatblock_address(self, *args):
@@ -1134,9 +1073,8 @@ class WebKitEdit(WebKit.WebView):
         '''预格式化样式
         '''
         #print 'WebKitEdit.do_do_formatblock_pre:'
-        self.eval('''
+        return self.eval(''' 
                 document.execCommand("formatblock", false, "pre"); ''')
-        #return self.do_highlight_pre(*args)
         pass
 
     def do_bold(self, *args):
@@ -1377,63 +1315,17 @@ class WebKitEdit(WebKit.WebView):
             pass
         return
 
-    def do_highlight_pre(self, *args):
-        self.eval(r'''
-        var mergePreElements = function(){
-            var es = document.getElementsByTagName('pre');
-            var first = es.length ?  es[0] : null;
-            var ces = [first];
-            var jces = []
-            for (var i=1; i<es.length; i++){
-                e = es[i];
-                prev = es[i-1];
-                if (e.previousSibling && e.previousSibling.textContent == '\n' && e.previousSibling.previousSibling == prev){
-                    ces.push(e);
-                } else {
-                    first = e;
-                    jces.push(ces);
-                    ces = [first];
-                }
-            }
-            for (var i=0; i<jces.length; i++){
-                ces = jces[i];
-                var first = ces[0];
-                var txt = '';
-                txt += first.innerText;
-                for (var t=1; t<ces.length; t++){
-                    var e = ces[t];
-                    txt += '\n' + e.innerText;
-                    e.parentElement.removeChild(e);
-                }
-                first.innerText = txt;
-            }
-        };
-        mergePreElements();
-        var getPres = function(){
-            var preIds=[];
-            var es = document.getElementsByTagName('pre');
-            for (var i=1; i<es.length; i++){
-                e = es[i];
-                e.id = Math.random().toString(16).slice(2);
-                preIds.push([e.id, e.inerText]);
-            }
-            return preIds;
-        };
-        getPres();
-        ''')
-        return
-
     
 
 
 if __name__=="__main__":
     #print 'WebKitEdit.main'
-    w=Gtk.Window()
-    w.connect("delete_event", Gtk.main_quit)
+    w=gtk.Window()
+    w.connect("delete_event", gtk.main_quit)
     m=WebKitEdit()
     w.add(m)
     w.show_all()
-    Gtk.main()
+    gtk.main()
 
 
 
