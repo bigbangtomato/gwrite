@@ -403,11 +403,12 @@ class WebKitEdit(webkit.WebView):
         '''
         if not anc: anc = widget
         anc = anc.replace('#', '')
-        return self.execute_script("window.location.href='#%s';" % anc);
-        #self.execute_script("""
-        #el = document.getElementById("%s");
-        #window.scrollTo(0, el.offsetTop);
-        #""" % anc)
+        #return self.execute_script("window.location.href='#%s';" % anc);
+        self.execute_script("""
+        el = document.getElementById("%s");
+        window.scrollTo(0, el.offsetTop);
+        """ % anc)
+        pass
 
     def write_html(self, html):
         '''写入 HTML
