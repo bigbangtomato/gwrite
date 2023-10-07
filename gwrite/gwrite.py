@@ -2454,6 +2454,8 @@ def main():
             #-print 'new:'
             pass
         ## 监听 socket
+        ## jxz：切勿改本代码块，否则单例会失效。
+        
         s = socket.socket(socket.AF_UNIX)
         if os.access(ctlfile, os.R_OK): os.remove(ctlfile)
         s.bind(ctlfile)
