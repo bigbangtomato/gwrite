@@ -15,6 +15,9 @@ from gi.repository import Gdk
 __all__ = ['error', 'info', 'inputbox', 'messagedialog', 'open', 'save', 'warning',
         'yesno']
 
+import gi
+gi.require_version('GtkSource', '3.0')
+
 try: from gi.repository import GtkSource
 except: GtkSource = None
 

@@ -5,6 +5,10 @@
 @license: LGPLv3+
 '''
 
+
+import gi
+gi.require_version('WebKit', '3.0')
+
 from gi.repository import Gtk
 from gi.repository import GLib
 from gi.repository import GObject
